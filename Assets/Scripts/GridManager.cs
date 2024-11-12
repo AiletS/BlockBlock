@@ -1,7 +1,10 @@
 using System.Collections.Generic;
-using System.ComponentModel;
 using UnityEngine;
-using UnityEngine.Rendering;
+using UnityEngine.UI;
+using DG.Tweening;
+using System.Threading.Tasks;
+
+
 
 public enum Directions
 {
@@ -13,8 +16,9 @@ public enum Directions
 
 public class GridManager : MonoBehaviour
 {
-    public GameObject[,] tiles, bgtiles, answerTiles;
+    public GameObject[,] tiles, answerTiles;
     public List<int[,]> grid_history = new List<int[,]>();
+    public int[,] answer_grid = new int[0, 0];
     private Dictionary<Vector2Int, int> answer = new Dictionary<Vector2Int, int>();
     private int now_level = 1;
     private int max_level = 1;
@@ -23,6 +27,8 @@ public class GridManager : MonoBehaviour
     [SerializeField] private List<Color> tileColors;
     [SerializeField] private Camera cam;
     [SerializeField] private GameObject clearText;
+    [SerializeField] private Sprite[] levelSprites;
+    [SerializeField] private Image[] levelImages;
 
     private void Awake()
     {
@@ -42,7 +48,8 @@ public class GridManager : MonoBehaviour
         clearText.SetActive(false);
         LoadGridFile(level);
         LoadAnswerGridFile(level);
-        DrawGrid();
+        FirstDrawGrid();
+        DrawLevel();
         PlayerPrefs.SetInt("now_level", level);
     }
 
@@ -61,7 +68,6 @@ public class GridManager : MonoBehaviour
         int col = int.Parse(rowcol[1]);
         int[,] grid = new int[row, col];
         tiles = new GameObject[row, col];
-        bgtiles = new GameObject[row, col];
 
         float camposx = -1f;
         float camposy = col / 2f - (col % 2 == 0 ? 0.5f : 0);
@@ -93,7 +99,8 @@ public class GridManager : MonoBehaviour
         string[] rowcol = lines[0].Split(' ');
         int row = int.Parse(rowcol[0]);
         int col = int.Parse(rowcol[1]);
-        int[,] answer_grid = new int[row, col];
+        answer_grid = new int[row, col];
+        answerTiles = new GameObject[row, col];
         answer = new Dictionary<Vector2Int, int>();
         for(int i = 1; i < lines.Length; i++)
         {
@@ -103,7 +110,6 @@ public class GridManager : MonoBehaviour
                 answer_grid[i - 1, j] = int.Parse(cells[j]);
             }
         }
-        DrawAnswerGrid(answer_grid);
         List<Vector2Int> connectedTiles = GetConnectedTiles(answer_grid);
         Vector2Int playerPos = new Vector2Int();
         for(int i = 0; i < row; i++) for(int j = 0; j < col; j++)
@@ -121,6 +127,41 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    public void DrawLevel()
+    {
+        string level = now_level.ToString();
+        while(level.Length < 3) level = "0" + level;
+        for(int i = 0; i < level.Length; i++)
+        {
+            levelImages[i].sprite = levelSprites[level[i] - '0'];
+        }
+    }
+
+    public async void FirstDrawGrid()
+    {
+        int row = answer_grid.GetLength(0);
+        int col = answer_grid.GetLength(1);
+        for(int i = 0; i < row; i++) for(int j = 0; j < col; j++)
+        {
+            answerTiles[i, j] = Instantiate(tilePrefab, new Vector3(j - col - 1, -i, 0), Quaternion.identity);
+            answerTiles[i, j].GetComponent<SpriteRenderer>().color = tileColors[answer_grid[i, j]];
+            TileGenerateAnimation(answerTiles[i, j]);
+            //await Task.Delay(10);
+        }
+
+        int[,] now_grid = grid_history[grid_history.Count - 1];
+        for(int i = 0; i < now_grid.GetLength(0); i++)
+        {
+            for(int j = 0; j < now_grid.GetLength(1); j++)
+            {
+                tiles[i, j] = Instantiate(tilePrefab, new Vector3(j, -i, 0), Quaternion.identity);
+                tiles[i, j].GetComponent<SpriteRenderer>().color = tileColors[now_grid[i, j]];
+                TileGenerateAnimation(tiles[i, j]);
+                //await Task.Delay(10);
+            }
+        }
+    }
+
     public void DrawGrid()
     {
         int[,] now_grid = grid_history[grid_history.Count - 1];
@@ -128,26 +169,22 @@ public class GridManager : MonoBehaviour
         {
             for(int j = 0; j < now_grid.GetLength(1); j++)
             {
-                bgtiles[i, j] = Instantiate(tilePrefab, new Vector3(j, -i, 0), Quaternion.identity);
-                bgtiles[i, j].GetComponent<SpriteRenderer>().color = tileColors[1];
-                bgtiles[i, j].GetComponent<SpriteRenderer>().sortingOrder = -10;
                 tiles[i, j] = Instantiate(tilePrefab, new Vector3(j, -i, 0), Quaternion.identity);
                 tiles[i, j].GetComponent<SpriteRenderer>().color = tileColors[now_grid[i, j]];
             }
         }
     }
 
-    public void DrawAnswerGrid(int[,] grid)
+    private void TileGenerateAnimation(GameObject tile)
     {
-        int row = grid.GetLength(0);
-        int col = grid.GetLength(1);
-        answerTiles = new GameObject[row, col];
-        for(int i = 0; i < row; i++) for(int j = 0; j < col; j++)
-        {
-            answerTiles[i, j] = Instantiate(tilePrefab, new Vector3(j - col - 1, -i, 0), Quaternion.identity);
-            answerTiles[i, j].GetComponent<SpriteRenderer>().color = tileColors[grid[i, j]];
-        }
+        var sequence = DOTween.Sequence();
+        sequence.Append(tile.GetComponent<SpriteRenderer>().DOFade(0, 0));
+        sequence.Join(tile.transform.DOMoveY(-1, 0).SetRelative());
+        sequence.Append(tile.GetComponent<SpriteRenderer>().DOFade(1, 0.5f));
+        sequence.Join(tile.transform.DOMoveY(1, 0.5f).SetRelative());
 
+        sequence.SetLink(tile, LinkBehaviour.KillOnDestroy)
+                .Play();
     }
 
     public void ClearGrid()
@@ -158,7 +195,6 @@ public class GridManager : MonoBehaviour
             for(int j = 0; j < grid.GetLength(1); j++)
             {
                 Destroy(tiles[i, j]);
-                Destroy(bgtiles[i, j]);
             }
         }
     }
@@ -342,8 +378,8 @@ public class GridManager : MonoBehaviour
 
     public void Reset()
     {
+        DOTween.KillAll();
         foreach(var obj in answerTiles) Destroy(obj);
-        foreach(var obj in bgtiles) Destroy(obj);
         foreach(var obj in tiles) Destroy(obj);
         grid_history.Clear();
         answer.Clear();
