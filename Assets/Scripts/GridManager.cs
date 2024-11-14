@@ -73,7 +73,7 @@ public class GridManager : MonoBehaviour
         float camposy = col / 2f - (col % 2 == 0 ? 0.5f : 0);
         cam.transform.position = new Vector3(camposx, -camposy, -10);
         int camsize = Mathf.Max(row, col);
-        cam.orthographicSize = camsize;
+        cam.orthographicSize = camsize - 1;
 
         for(int i = 1; i < lines.Length; i++)
         {
