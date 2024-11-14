@@ -11,7 +11,7 @@ public class TitleManager : MonoBehaviour
 
     private void Update()
     {
-        if(Input.GetKeyDown(KeyCode.UpArrow))
+        if(Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
         {
             var sequence = DOTween.Sequence();
             sequence.Append(DOVirtual.DelayedCall(0f, () => {
